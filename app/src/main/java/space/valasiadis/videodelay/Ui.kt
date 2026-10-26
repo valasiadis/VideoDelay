@@ -118,7 +118,8 @@ fun VideoDelayScreen(
     val currentZoomBy by rememberUpdatedState(onZoomBy)
     val recording = stats?.recordingUs != null
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    var screen by remember { mutableStateOf(IntSize.Zero) }
+    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { screen = it }) {
         AndroidView(factory = { textureView }, modifier = Modifier.fillMaxSize())
         // Black while the buffer (re)fills, instead of the last frame from before.
         if (stats?.showing != true) Box(Modifier.fillMaxSize().background(Color.Black))
@@ -146,20 +147,6 @@ fun VideoDelayScreen(
                 .padding(top = 8.dp, bottom = 28.dp)
                 .onSizeChanged { area = it },
         ) {
-            // Status at the top: format, and buffer progress while it fills.
-            Column(
-                Modifier.align(Alignment.TopCenter),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                stats?.let {
-                    Text(
-                        "${settings.height}p${settings.fps} · ${it.codec}",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-
             // Buffer progress, centered on the (black) picture while it fills.
             if (stats != null && stats.bufferedUs + 150_000 < stats.delayUs) {
                 BufferingIndicator(stats.bufferedUs, stats.delayUs, Modifier.align(Alignment.Center))
@@ -190,13 +177,10 @@ fun VideoDelayScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        DelayStepper(
-                            delayMs = settings.delayMs,
-                            onChange = { onSettingsChange(settings.copy(delayMs = it)) },
-                        )
+                        RoundIconButton(R.drawable.ic_settings, "Settings") { showSettings = true }
                     }
                     RecordButton(recording = recording, enabled = stats != null, onClick = onToggleRecord)
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         if (cameras.size > 1) {
                             RoundIconButton(R.drawable.ic_flip_camera, "Switch camera", enabled = !recording) {
                                 onSettingsChange(
@@ -204,10 +188,28 @@ fun VideoDelayScreen(
                                 )
                             }
                         }
-                        RoundIconButton(R.drawable.ic_settings, "Settings") { showSettings = true }
                     }
                 }
             }
+        }
+
+        // Delay control, top left, vertically centered in the black band above the picture.
+        val density = LocalDensity.current
+        val stepperHeight = with(density) { 40.dp.toPx() }
+        val minTop = with(density) { 12.dp.toPx() }
+        val pictureHeight = if (screen.width > 0) minOf(screen.height.toFloat(), screen.width / contentAspect) else 0f
+        val band = (screen.height - pictureHeight) / 2
+        val stepperTop = maxOf(minTop, (band - stepperHeight) / 2)
+        Box(
+            Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start))
+                .padding(start = 20.dp)
+                .offset { IntOffset(0, stepperTop.roundToInt()) },
+        ) {
+            DelayStepper(
+                delayMs = settings.delayMs,
+                onChange = { onSettingsChange(settings.copy(delayMs = it)) },
+            )
         }
 
         if (error != null) CenterMessage(error, "Retry", onRetry)
@@ -217,6 +219,7 @@ fun VideoDelayScreen(
             settings = settings,
             cameras = cameras,
             recording = recording,
+            formatLabel = stats?.let { "${settings.height}p${settings.fps} · ${it.codec}" },
             onChange = onSettingsChange,
             onDismiss = { showSettings = false },
         )
@@ -401,6 +404,7 @@ private fun BoxScope.SettingsPanel(
     settings: Settings,
     cameras: Map<Facing, CameraOption>,
     recording: Boolean,
+    formatLabel: String?,
     onChange: (Settings) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -501,7 +505,12 @@ private fun BoxScope.SettingsPanel(
                         .padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    Text("Settings", style = MaterialTheme.typography.headlineSmall)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                        formatLabel?.let {
+                            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                     SettingsContent(settings, cameras, recording, onChange)
                 }
             }
