@@ -40,6 +40,8 @@ class MainActivity : ComponentActivity() {
     private var zoom by mutableFloatStateOf(1f)
     /** Width/height of the picture as shown on screen; the live preview box uses it. */
     private var contentAspect by mutableFloatStateOf(9f / 16f)
+    /** Height of the black band above the picture, in px; the delay control centers itself in it. */
+    private var pictureTop by mutableFloatStateOf(0f)
 
     private var pipeline: DelayPipeline? = null
     private var surfaceTexture: SurfaceTexture? = null
@@ -153,6 +155,7 @@ class MainActivity : ComponentActivity() {
                     zoom = zoom,
                     zoomRange = cameras[settings.facing]?.zoomRange,
                     contentAspect = contentAspect,
+                    pictureTop = pictureTop,
                     createPreviewView = ::createPreviewView,
                     onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                     onSettingsChange = ::applySettings,
@@ -340,8 +343,18 @@ class MainActivity : ComponentActivity() {
         m.postRotate(rotation.toFloat(), cx, cy)
         m.postScale(scale, scale, cx, cy)
         if (camera.facing == Facing.FRONT && settings.mirrorFront) m.postScale(-1f, 1f, cx, cy)
+
+        // Shift the picture up so the bottom black band can hold the controls without the record
+        // button overlapping the picture. The top band keeps whatever is left.
+        val spare = (vh - ch * scale).coerceAtLeast(0f)
+        val bottomNeeded = BOTTOM_CONTROLS_DP * resources.displayMetrics.density
+        val bottomBand = minOf(spare, maxOf(spare / 2, bottomNeeded))
+        val topBand = spare - bottomBand
+        m.postTranslate(0f, topBand - spare / 2)
+
         textureView.setTransform(m)
         contentAspect = cw / ch
+        pictureTop = topBand
         updatePreviewTransform()
     }
 
@@ -376,5 +389,10 @@ class MainActivity : ComponentActivity() {
         m.postScale(scale, scale, cx, cy)
         if (camera.facing == Facing.FRONT && settings.mirrorFront) m.postScale(-1f, 1f, cx, cy)
         view.setTransform(m)
+    }
+
+    private companion object {
+        /** Bottom padding + record button + a little air; keep in sync with the bottom bar in Ui.kt. */
+        const val BOTTOM_CONTROLS_DP = 28 + 72 + 20
     }
 }

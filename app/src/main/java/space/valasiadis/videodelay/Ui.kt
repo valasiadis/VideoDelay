@@ -107,6 +107,7 @@ fun VideoDelayScreen(
     zoom: Float,
     zoomRange: Range<Float>?,
     contentAspect: Float,
+    pictureTop: Float,
     createPreviewView: (Context) -> TextureView,
     onRequestPermission: () -> Unit,
     onSettingsChange: (Settings) -> Unit,
@@ -118,8 +119,7 @@ fun VideoDelayScreen(
     val currentZoomBy by rememberUpdatedState(onZoomBy)
     val recording = stats?.recordingUs != null
 
-    var screen by remember { mutableStateOf(IntSize.Zero) }
-    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { screen = it }) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { textureView }, modifier = Modifier.fillMaxSize())
         // Black while the buffer (re)fills, instead of the last frame from before.
         if (stats?.showing != true) Box(Modifier.fillMaxSize().background(Color.Black))
@@ -197,9 +197,7 @@ fun VideoDelayScreen(
         val density = LocalDensity.current
         val stepperHeight = with(density) { 40.dp.toPx() }
         val minTop = with(density) { 12.dp.toPx() }
-        val pictureHeight = if (screen.width > 0) minOf(screen.height.toFloat(), screen.width / contentAspect) else 0f
-        val band = (screen.height - pictureHeight) / 2
-        val stepperTop = maxOf(minTop, (band - stepperHeight) / 2)
+        val stepperTop = maxOf(minTop, (pictureTop - stepperHeight) / 2)
         Box(
             Modifier
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start))
@@ -338,11 +336,12 @@ private fun RoundIconButton(icon: Int, description: String, enabled: Boolean = t
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(48.dp).clip(CircleShape).background(Scrim),
+        modifier = Modifier.size(60.dp).clip(CircleShape).background(Scrim),
     ) {
         Icon(
             painterResource(icon),
             contentDescription = description,
+            modifier = Modifier.size(30.dp),
             tint = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
         )
     }
