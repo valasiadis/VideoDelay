@@ -130,3 +130,15 @@ git push origin v1.0.0
 
 The workflow refuses to publish if a secret is missing or the APK turns out debug-signed. It can
 also be re-run for an existing tag from the *Actions* tab ("Run workflow").
+
+## License
+
+Copyright (C) 2026 Emanuel Valasiadis
+
+Video Delay is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+[LICENSE](LICENSE) file for details.
