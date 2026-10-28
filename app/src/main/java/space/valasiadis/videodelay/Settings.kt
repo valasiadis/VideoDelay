@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 
 const val MAX_DELAY_MS = 30_000
+val SLOW_RATES = listOf(0.1f, 0.25f, 0.5f, 0.75f)
 
 data class Settings(
     val facing: Facing = Facing.BACK,
@@ -15,6 +16,8 @@ data class Settings(
     val mirrorFront: Boolean = true,
     val hevc: Boolean = false,
     val showPreview: Boolean = true,
+    /** Replay speed while the picture is held. */
+    val slowRate: Float = 0.5f,
 ) {
     /** Changing any of these needs a camera/encoder restart (which empties the delay buffer). */
     fun captureKey() = listOf(facing, width, height, fps, stabilization, hevc)
@@ -33,6 +36,7 @@ class SettingsStore(context: Context) {
         mirrorFront = prefs.getBoolean("mirrorFront", true),
         hevc = prefs.getBoolean("hevc", false),
         showPreview = prefs.getBoolean("showPreview", true),
+        slowRate = prefs.getFloat("slowRate", 0.5f).let { if (it in SLOW_RATES) it else 0.5f },
     )
 
     fun save(s: Settings) = prefs.edit {
@@ -45,6 +49,7 @@ class SettingsStore(context: Context) {
         putBoolean("mirrorFront", s.mirrorFront)
         putBoolean("hevc", s.hevc)
         putBoolean("showPreview", s.showPreview)
+        putFloat("slowRate", s.slowRate)
     }
 }
 

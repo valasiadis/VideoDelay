@@ -135,6 +135,8 @@ class PacketRing(capacityBytes: Int, private val maxAgeUs: Long) : AutoCloseable
         if (tailSeq == headSeq) 0 else pts[slot(tailSeq - 1)] - pts[slot(headSeq)]
     }
 
+    fun oldestPtsUs(): Long? = synchronized(lock) { if (tailSeq == headSeq) null else pts[slot(headSeq)] }
+
     fun newestPtsUs(): Long? = synchronized(lock) { if (tailSeq == headSeq) null else pts[slot(tailSeq - 1)] }
 
     override fun close() {

@@ -40,6 +40,11 @@ android {
     }
 
     buildTypes {
+        // Installs next to the release app instead of colliding with it.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

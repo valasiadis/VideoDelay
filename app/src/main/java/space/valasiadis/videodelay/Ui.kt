@@ -10,6 +10,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -112,11 +114,14 @@ fun VideoDelayScreen(
     onRequestPermission: () -> Unit,
     onSettingsChange: (Settings) -> Unit,
     onZoomBy: (Float) -> Unit,
+    onSlowMotion: (Boolean) -> Unit,
     onToggleRecord: () -> Unit,
     onRetry: () -> Unit,
 ) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val currentZoomBy by rememberUpdatedState(onZoomBy)
+    val currentSlowMotion by rememberUpdatedState(onSlowMotion)
+    var slowHeld by remember { mutableStateOf(false) }
     val recording = stats?.recordingUs != null
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -124,12 +129,31 @@ fun VideoDelayScreen(
         // Black while the buffer (re)fills, instead of the last frame from before.
         if (stats?.showing != true) Box(Modifier.fillMaxSize().background(Color.Black))
 
-        // Pinch to zoom. Note the zoom shows up after the delay, like everything else.
+        // Pinch to zoom (shows up after the delay, like everything else).
+        // Hold one finger to replay in slow motion; a second finger ends it and pinches instead.
         Box(
             Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTransformGestures { _, _, zoomChange, _ -> currentZoomBy(zoomChange) }
+                }
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        // Wait out a short hold; lifting or adding a finger before then cancels.
+                        val held = withTimeoutOrNull(HOLD_MS) {
+                            while (awaitPointerEvent().changes.count { it.pressed } == 1) Unit
+                        } == null
+                        if (!held) return@awaitEachGesture
+                        slowHeld = true
+                        currentSlowMotion(true)
+                        try {
+                            while (awaitPointerEvent().changes.count { it.pressed } == 1) Unit
+                        } finally {
+                            slowHeld = false
+                            currentSlowMotion(false)
+                        }
+                    }
                 },
         )
 
@@ -165,6 +189,10 @@ fun VideoDelayScreen(
                 // Sit a little above the controls, slightly into the picture (like Pixel Camera's zoom chip).
                 stats?.recordingUs?.let {
                     Pill("● REC  ${clock(it)}", color = RecordRed)
+                    Spacer(Modifier.height(8.dp))
+                }
+                if (slowHeld) {
+                    Pill("Slow  ${rate(settings.slowRate)}")
                     Spacer(Modifier.height(8.dp))
                 }
                 if (zoom != 1f && zoomRange != null) {
@@ -550,6 +578,23 @@ private fun SettingsContent(
         )
     }
 
+    Section("Slow motion (hold the picture)") {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            SLOW_RATES.forEachIndexed { i, r ->
+                SegmentedButton(
+                    selected = settings.slowRate == r,
+                    onClick = { onChange(settings.copy(slowRate = r)) },
+                    shape = SegmentedButtonDefaults.itemShape(i, SLOW_RATES.size),
+                ) { Text(rate(r)) }
+            }
+        }
+        Text(
+            "Hold the picture to replay at this speed. Let go to jump back to the set delay.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
     SwitchRow(
         "Live preview",
         "Small undelayed picture in the corner.",
@@ -658,6 +703,10 @@ private fun SwitchRow(
         Switch(checked = checked && enabled, onCheckedChange = onChange, enabled = enabled)
     }
 }
+
+private const val HOLD_MS = 250L
+
+private fun rate(r: Float) = "$r×"
 
 private fun secs(us: Long) = String.format(Locale.US, "%.1f s", us / 1e6)
 

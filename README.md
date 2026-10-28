@@ -12,6 +12,8 @@ Services, no internet access, and only the camera permission.
 - **Delay from 0 to 30 s.** Adjust it in 1 s steps with the −/+ control, or in 0.5 s steps in settings.
 - **Front or back camera**, with pinch to zoom (including the ultrawide on Pixels).
 - **Resolution and frame rate**: 480p up to 4K, 30 or 60 fps, whatever your camera and video encoder support.
+- **Slow motion**: hold the picture to replay at 0.1×, 0.25×, 0.5× or 0.75×; let go to jump
+  back to the set delay.
 - **Live preview**: a small undelayed picture you can drag anywhere, or turn off.
 - **Recording** of the live camera (not the delayed picture) to `Movies/VideoDelay/`, so it
   shows up in your gallery. Video only, no audio.
@@ -54,6 +56,10 @@ phone. You'll have to repeat this for every update.
 - **Delay:** top left. **Record:** bottom center. **Settings:** left of record. **Switch camera:** right of it.
 - While the delay buffer fills, the screen stays black and shows the progress, e.g. after
   starting the app or changing resolution.
+- **Hold** the picture with one finger to replay in slow motion (speed in settings). Let go and
+  it jumps back to the set delay. Slow motion falls further behind live the longer you hold, and the
+  buffer holds about 33 s: at 5 s delay and 0.5× you can hold for about 50 s, at 30 s delay only
+  a few seconds. After that, it continues at normal speed. 60 fps makes slow motion much smoother.
 - **Drag** the live preview to move it. **Pinch** anywhere to zoom. Zoom changes, like
   everything else, show up after the delay.
 - Recordings start right away when you press record and contain the live camera feed.
@@ -90,6 +96,9 @@ Requirements: JDK 21 (Gradle downloads one if needed) and the Android SDK with p
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew installDebug         # build and install on a connected phone
 ```
+
+Debug builds install as a separate app, **Video Delay (test)** (`space.valasiadis.videodelay.debug`),
+so they don't collide with the release version from Obtainium.
 
 Release builds without signing secrets fall back to the debug key, so they still install
 locally.

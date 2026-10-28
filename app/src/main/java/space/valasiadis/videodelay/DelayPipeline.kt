@@ -58,6 +58,8 @@ class DelayPipeline(
         val delayUs: Long,
         val recordingUs: Long?,
         val codec: String,
+        /** Playback speed while the picture is held, null at normal speed. */
+        val slowRate: Float?,
     )
 
     val width = settings.width
@@ -78,6 +80,11 @@ class DelayPipeline(
     @Volatile private var encoderFormat: MediaFormat? = null
     @Volatile private var delayUs = initialDelayMs * 1000L
     private val seekRequested = AtomicBoolean(false)
+
+    // Slow motion while the picture is held: playback falls behind, then jumps back to the delay.
+    @Volatile private var slowRate = settings.slowRate
+    @Volatile private var slowHeld = false
+    private val slowChanged = AtomicBoolean(false)
 
     /** Capture time (pts) of the frame currently on screen. */
     @Volatile private var shownPtsUs = Long.MIN_VALUE
@@ -205,6 +212,13 @@ class DelayPipeline(
                 override fun onConfigured(s: CameraCaptureSession) {
                     if (!running || gen != sessionGen) return
                     session = s
+                    // The preview changed while this session was being set up (e.g. its view
+                    // appeared right after the permission grant): rebuild with the current one.
+                    val now = preview
+                    if (now?.surface != target?.surface || now?.size != target?.size) {
+                        createSession(d)
+                        return
+                    }
                     request = d.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
                         addTarget(encoderSurface)
                         if (previewSurface != null) addTarget(previewSurface)
@@ -342,6 +356,18 @@ class DelayPipeline(
         }
     }
 
+    fun setSlowRate(rate: Float) {
+        slowRate = rate.coerceIn(0.05f, 1f)
+    }
+
+    /** While on, replay runs at [slowRate]. When it ends, playback jumps back to the set delay. */
+    fun setSlowMotion(on: Boolean) {
+        if (slowHeld != on) {
+            slowHeld = on
+            slowChanged.set(true)
+        }
+    }
+
     private fun playbackLoop() {
         var decoder: MediaCodec? = null
         try {
@@ -371,8 +397,36 @@ class DelayPipeline(
             var skipUntil = Long.MIN_VALUE
             var fed = false
 
+            // In slow motion the playhead runs at slowRate from an anchor instead of clock - delay.
+            var slow = false
+            var anchorClockUs = 0L
+            var anchorPtsUs = 0L
+            fun playhead(nowUs: Long) =
+                if (slow) anchorPtsUs + ((nowUs - anchorClockUs) * slowRate).toLong() else nowUs - delayUs
+
             while (running) {
-                val target = clockUs() - delayUs // capture time that should be on screen now
+                if (slowChanged.getAndSet(false)) {
+                    val nowUs = clockUs()
+                    if (slowHeld && !slow) {
+                        anchorPtsUs = playhead(nowUs)
+                        anchorClockUs = nowUs
+                        slow = true
+                    } else if (!slowHeld && slow) {
+                        slow = false
+                        seekRequested.set(true)
+                    }
+                }
+                if (slow) {
+                    // Don't fall off the end of the buffer: once there, play on at normal speed.
+                    val nowUs = clockUs()
+                    val oldest = ring.oldestPtsUs()
+                    if (oldest != null && playhead(nowUs) < oldest + SLOW_MARGIN_US) {
+                        anchorPtsUs = oldest + SLOW_MARGIN_US
+                        anchorClockUs = nowUs
+                    }
+                }
+
+                val target = playhead(clockUs()) // capture time that should be on screen now
 
                 if (seekRequested.getAndSet(false) || cursor < 0 || cursor < ring.oldestSeq) {
                     val seq = ring.keyframeAtOrBefore(target)
@@ -428,7 +482,7 @@ class DelayPipeline(
                 }
 
                 // Show it when its time comes.
-                val now = clockUs() - delayUs
+                val now = playhead(clockUs())
                 if (pending >= 0 && pendingPts <= now) {
                     decoder.releaseOutputBuffer(pending, true)
                     shownPtsUs = pendingPts
@@ -485,6 +539,7 @@ class DelayPipeline(
         delayUs = delayUs,
         recordingUs = recorder?.durationUs,
         codec = if (mime == Codecs.HEVC) "HEVC" else "H.264",
+        slowRate = if (slowHeld) slowRate else null,
     )
 
     // ---------------------------------------------------------------- teardown
@@ -519,5 +574,7 @@ class DelayPipeline(
     private companion object {
         const val TAG = "DelayPipeline"
         const val FEED_AHEAD_US = 150_000L
+        /** Keeps the slow playhead a keyframe interval clear of evictions. */
+        const val SLOW_MARGIN_US = 1_500_000L
     }
 }

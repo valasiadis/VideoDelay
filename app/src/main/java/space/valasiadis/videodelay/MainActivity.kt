@@ -160,6 +160,7 @@ class MainActivity : ComponentActivity() {
                     onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                     onSettingsChange = ::applySettings,
                     onZoomBy = ::zoomBy,
+                    onSlowMotion = { pipeline?.setSlowMotion(it) },
                     onToggleRecord = ::toggleRecording,
                     onRetry = ::restart,
                 )
@@ -260,6 +261,7 @@ class MainActivity : ComponentActivity() {
             restart()
         } else {
             pipeline?.setDelay(resolved.delayMs)
+            pipeline?.setSlowRate(resolved.slowRate)
             updateTransform()
         }
     }
